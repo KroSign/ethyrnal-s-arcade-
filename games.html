@@ -120,24 +120,31 @@
 <div id="buttons">Loading…</div>
 
 <script>
-const url = "GameList.txt";  // ← FIXED — loads from same folder as this HTML
-let lines = [];
+const folders = [
+    { path: "activities/", listFile: "activities/GameList.txt" },
+    { path: "activities2/", listFile: "activities2/GameList.txt" }
+];
+
+let games = [];
 let lastRendered = [];
 
-// Load game list
-fetch(url)
-  .then(r => r.text())
-  .then(text => {
-      lines = text.split("\n").filter(l => l.trim() !== "");
-      renderButtons(lines);
-      requestAnimationFrame(() =>
-          document.getElementById("loadingScreen").classList.add("hide")
-      );
-  })
-  .catch(() => {
-      document.getElementById("buttons").innerHTML = "Error loading file.";
-      document.getElementById("loadingScreen").classList.add("hide");
-  });
+Promise.all(
+    folders.map(folder =>
+        fetch(folder.listFile)
+            .then(r => r.text())
+            .then(text => {
+                return text
+                    .split("\n")
+                    .filter(l => l.trim() !== "")
+                    .map(l => ({ folder: folder.path, file: l.trim() }));
+            })
+            .catch(() => [])
+    )
+).then(results => {
+    games = results.flat();
+    renderButtons(games);
+    document.getElementById("loadingScreen").classList.add("hide");
+});
 
 function cleanName(original) {
     let n = original.trim();
@@ -154,11 +161,11 @@ function renderButtons(list) {
     const box = document.getElementById("buttons");
     const frag = document.createDocumentFragment();
 
-    list.forEach(original => {
+    list.forEach(game => {
         const btn = document.createElement("button");
-        btn.textContent = cleanName(original);
+        btn.textContent = cleanName(game.file);
         btn.onclick = () => {
-            window.open(`activities/${encodeURIComponent(original.trim())}`, "_blank");
+            window.open(`${game.folder}${encodeURIComponent(game.file)}`, "_blank");
         };
         frag.appendChild(btn);
     });
@@ -167,16 +174,15 @@ function renderButtons(list) {
     box.appendChild(frag);
 }
 
-// THROTTLED search
 let searchTimeout;
 document.getElementById("searchBox").addEventListener("input", function () {
     const q = this.value.toLowerCase();
     clearTimeout(searchTimeout);
 
     searchTimeout = setTimeout(() => {
-        const filtered = lines.filter(l =>
-            cleanName(l).toLowerCase().includes(q) ||
-            l.toLowerCase().includes(q)
+        const filtered = games.filter(g =>
+            cleanName(g.file).toLowerCase().includes(q) ||
+            g.file.toLowerCase().includes(q)
         );
         renderButtons(filtered);
     }, 70);
